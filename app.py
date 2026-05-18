@@ -14,7 +14,7 @@ api_key = st.sidebar.text_input("Gemini API Key를 입력하세요", type="passw
 
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     st.warning("왼쪽 사이드바에 API Key를 입력해야 AI 코치가 작동합니다.")
 
