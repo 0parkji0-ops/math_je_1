@@ -2,68 +2,79 @@ import streamlit as st
 import google.generativeai as genai
 
 # 1. 페이지 설정 및 디자인
-st.set_page_config(page_title="특성화고 질문 심폐소생소", page_icon="🚀", layout="centered")
+st.set_page_config(page_title="나만의 데이터 연구소: AI 질문 코치", layout="centered")
 
-st.title("🚀 특성화고 맞춤형 질문 심폐소생소")
-st.subheader("여러분의 호기심을 멋진 '데이터 탐구 주제'로 바꾸어 드립니다!")
-st.write("---")
+st.title("📊 나만의 데이터 연구소")
+st.subheader("💡 데이터 기반 탐구 과제 설계를 위한 AI 코치")
+st.write("여러분의 날것의 관심사나 일상의 의문을 통계적으로 조사할 수 있는 '멋진 탐구 주제'로 발전시켜 드립니다. AI 코치의 안내에 따라 대답해 보세요!")
 
-# API 키 설정 (스트림릿 비밀번호 설정이나 직접 입력 가능)
-# 실제 수업 시에는 교사의 API 키를 환경변수에 숨겨두거나 입력창을 만듭니다.
-api_key = st.sidebar.text_input("Gemini API Key를 입력하세요", type="password")
-
-if api_key:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+# 2. API Key 설정 (Streamlit Secrets 연동 권장)
+# 만약 Secrets 설정을 안 했다면 사이드바에서 입력받도록 백업 마련
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
 else:
-    st.warning("왼쪽 사이드바에 API Key를 입력해야 AI 코치가 작동합니다.")
+    api_key = st.sidebar.text_input("Gemini API Key를 입력하세요", type="password")
 
-# 2. 학생 입력 양식
-with st.form("my_form"):
-    st.write("### ✍️ 나만의 원래 질문 적기")
-    original_q = st.text_input(
-        "평소에 궁금했던 점이나 엉뚱한 질문도 괜찮아요!",
-        placeholder="예시: 호텔 성수기 가격은 왜 비쌀까?, 수면시간이랑 집중력이 연관 있을까?"
-    )
+if not api_key:
+    st.info("API 키를 설정해주세요. (Streamlit Secrets 혹은 사이드바 입력)")
+    st.stop()
+
+# Gemini API 인증
+genai.configure(api_key=api_key)
+
+# 3. AI 코치에게 페르소나와 대화 규칙 부여 (System Instruction)
+system_instruction = (
+    "당신은 고등학생들이 일상의 궁금증을 '데이터 기반 수학/통계 탐정 과제'로 정교화하도록 돕는 인공지능 수업 코치입니다.\n\n"
+    "★ 가장 중요한 규칙: 절대로 학생에게 독립변수(X)와 종속변수(Y)를 먼저 알려주거나 정답 문장을 한 번에 완성해 주지 마십시오.\n"
+    "학생이 주도적으로 생각하여 변수를 찾아내도록 유도해야 합니다.\n\n"
+    "[대화 및 유도 단계]\n"
+    "1단계: 학생이 관심사나 날것의 질문(예: '지각하는 이유')을 말하면, 환영해 주고 격려합니다.\n"
+    "2단계: '그 현상이 일어나게 만드는 구체적인 원인(조건)'이 무엇이 있을지 학생에게 질문을 던져 스스로 나열하게 하십시오.\n"
+    "3단계: 학생이 원인들을 말하면, 그중 '숫자로 측정하거나 조사할 수 있는 구체적인 데이터(독립변수 X)'를 하나 고르도록 유도하십시오.\n"
+    "4단계: 독립변수가 정해지면, 그로 인해 '영향을 받아 변하는 결과(종속변수 Y)'가 무엇인지 수학적/통계적으로 측정 가능한 형태로 스스로 정의하게 하십시오.\n"
+    "5단계: 학생이 X와 Y를 모두 스스로 찾아내면 칭찬해주고, 최종적으로 '[독립변수 X]가 [종속변수 Y]에 미치는 영향'이라는 멋진 탐구 주제 문장으로 정리해 주며 대화를 마칩니다.\n\n"
+    "말투는 친절하고 따뜻한 고등학교 선생님의 어조(해요체)를 유지해 주세요. 학생이 엉뚱한 말을 하더라도 비계(Scaffolding)를 제공하여 올바른 방향으로 이끌어 주세요."
+)
+
+# 최신 gemini-2.5-flash 모델 설정
+model = genai.GenerativeModel(
+    model_name='gemini-2.5-flash',
+    system_instruction=system_instruction
+)
+
+# 4. Streamlit 세션 상태(대화 기록) 초기화
+if "chat_session" not in st.session_state:
+    # Gemini 라이브러리의 내장 대화 기능(start_chat) 사용
+    st.session_state.chat_session = model.start_chat(history=[])
     
-    st.write("### 🏨 내 질문과 가장 가까운 분야 선택")
-    category = st.selectbox(
-        "어떤 분야로 탐구해보고 싶나요?",
-        ["호텔/관광/전공 실무 경영", "학교생활/청소년 심리/통계", "과학/실험/확률적 분석", "기타 일상 호기심"]
-    )
-    
-    submitted = st.form_submit_button("AI 코치에게 피드백 받기 ⚡")
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    # AI 코치의 첫 환영 인사 추가
+    welcome_msg = "안녕하세요! 여러분의 일상 속 호기심을 멋진 수학·데이터 탐구 과제로 만들어 줄 AI 코치입니다. 현재 머릿속에 맴도는 관심사나 조사해 보고 싶은 현상을 편하게 말씀해 주세요! 😊"
+    st.session_state.messages.append({"role": "assistant", "content": welcome_msg})
 
-# 3. AI 코칭 프롬프트 엔진 작동
-if submitted and api_key:
-    if not original_q:
-        st.error("질문을 입력해 주세요!")
-    else:
-        with st.spinner("AI 코치가 질문을 정교하게 다듬는 중..."):
-            
-            # AI의 역할을 규정하는 핵심 시스템 프롬프트
-            system_prompt = f"""
-            당신은 특성화고등학교 학생들을 대상으로 하는 친절하고 격려 넘치는 '데이터 탐구 주도성 코치'입니다.
-            학생이 입력한 일상적이고 투박한 질문을 받아, 이를 수학적, 통계적, 과학적으로 증명 및 데이터 수집이 가능한 '진짜 탐구 질문'으로 리모델링해 주어야 합니다.
+# 5. 화면에 이전 대화 내용 렌더링 (카카오톡 대화창 스타일)
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
 
-            [학생 정보]
-            - 원래 질문: {original_q}
-            - 선택한 분야: {category}
+# 6. 사용자 입력 처리
+if user_input := st.chat_input("AI 코치와 대화하며 변수를 찾아보세요..."):
+    # 사용자가 입력한 메시지 화면에 표시 및 저장
+    with st.chat_message("user"):
+        st.write(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
 
-            [답변 양식 지침 - 반드시 다음 구조로 따뜻하게 응답할 것]
-            1. 🎉 **공감과 칭찬**: 학생의 질문이 가진 참신함이나 실무적 가치를 친절한 말투(~요체)로 폭풍 칭찬해 주세요.
-            2. 🛠️ **변수 매핑 (X와 Y 찾기)**: 이 질문을 데이터화하기 위해 조사해야 할 '원인[독립변수 X]'와 '결과[종속변수 Y]'를 명확히 짚어주세요.
-            3. 📈 **업그레이드 탐구 주제 제안**: 고등학생 수준에서 구글 폼 설문조사, 크롤링, 데이터 수집을 통해 해결할 수 있는 멋진 탐구 주제 2가지를 제안해 주세요. (문장 속에 X와 Y가 명확히 드러나고 통계/함수/확률 개념과 연결되도록)
-            4. 🏃 **다음 발자국**: 데이터를 모으기 위해 당장 내일 학교에서 무엇을 하면 좋을지(예: 설문조사 만들기, 웹사이트 가격 조사하기 등) 구체적인 미션을 던져주세요.
-            """
-            
+    # AI의 답변 생성 중 로딩 표시
+    with st.chat_message("assistant"):
+        with st.spinner("AI 코치가 생각하고 있습니다..."):
             try:
-                response = model.generate_content(system_prompt)
-                st.write("---")
-                st.success("✨ AI 코치의 심폐소생 완료!")
-                st.markdown(response.text)
+                # Gemini 대화 세션에 메시지 전송 및 답변 수신
+                response = st.session_state.chat_session.send_message(user_input)
+                ai_response = response.text
+                
+                # 답변 출력 및 저장
+                st.write(ai_response)
+                st.session_state.messages.append({"role": "assistant", "content": ai_response})
             except Exception as e:
                 st.error(f"오류가 발생했습니다: {e}")
-
-st.write("---")
-st.caption("© 2026 우리 학교 AI 융합 수업 프로젝트 - 질문이 데이터가 되는 순간")
